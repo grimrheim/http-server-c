@@ -11,6 +11,7 @@
 
 #define PORT "8888"
 #define BACKLOG 10
+#define BUFFER_SIZE 4096
 
 // Это необходимо, чтобы сервер не зависел от версии адреса
 static void *get_in_addr(struct sockaddr *sa) {
@@ -111,14 +112,13 @@ static int create_server_socket() {
     return sockfd;
 }
 
-/*
- * sockfd - сокет, который слушаем
- * sockaddr_storage - указатель на структуру, куда запишем адрес подключившегося клиента
- * sin_size - указатель на переменную с размером структуры.
- * Хранилище должно быть универсальный, под любой тип адреса.
- */
 int accept_client(int sockfd, struct sockaddr_storage *their_addr, socklen_t *sin_size) {
     /*
+     * sockfd - сокет, который слушаем
+     * sockaddr_storage - указатель на структуру, куда запишем адрес подключившегося клиента
+     * sin_size - указатель на переменную с размером структуры.
+     *
+     * Хранилище должно быть универсальный, под любой тип адреса.
      * Размер передается в accept как указатель, потому что это и вход в функцию
      * и выход, т.е. сколько байт записано.
      * Разыменование, что бы явно взять размер
@@ -130,25 +130,54 @@ int accept_client(int sockfd, struct sockaddr_storage *their_addr, socklen_t *si
     return new_fd;
 }
 
-void *handle_client(void *arg) {
+void send_html(int client_socket) {
+    FILE *file = fopen("index.html", "r");
+    if (!file) {
+        char *not_found = "HTTP/1.1 404 Not Found\r\n"
+                          "Content-Type: text/plain\r\n"
+                          "\r\n404 Not Found";
+        send(client_socket, not_found, strlen(not_found), 0);
+        return;
+    }
+
+    // Чтение HTML-файла
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    char *file_content = malloc(file_size + 1);
+    fread(file_content, 1, file_size, file);
+    file_content[file_size] = '\0';
+    fclose(file);
+
+    // Формируем HTML-ответ
+    char header[BUFFER_SIZE];
+    int header_len = snprintf(header, sizeof(header),
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: text/html; charset=utf-8\r\n"
+                            "Content-Length: %ld\r\n\r\n",
+                            file_size);
+
+    send(client_socket, header, header_len, 0);
+    send(client_socket, file_content, file_size, 0);
+}
+
+static void handle_client(void *arg) {
     int *fd = (int *)arg;
     int client_fd = *fd;
     free(fd);
 
-    char buf[512];
+    char buf[4096];
 
-    while (1) {
-        ssize_t r = recv(client_fd, buf, sizeof(buf), 0);
+    ssize_t n = recv(client_fd, buf, sizeof(buf) - 1, 0);
 
-        if (r <= 0) {
-            break;
-        }
-
-        send(client_fd, buf, r, 0);
+    if (n <= 0) {
+        close(client_fd);
+        return;
     }
-    close(client_fd);
 
-    return NULL;
+    send_html(client_fd);
+    close(client_fd);
 }
 
 int main() {
@@ -174,7 +203,5 @@ int main() {
         *client_fd = new_fd;
 
         handle_client(client_fd);
-
     }
-
 }
