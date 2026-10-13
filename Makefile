@@ -9,7 +9,7 @@ LDFLAGS = -fsanitize=address,undefined
 
 $(TARGET): $(OBJ)
 	$(CC) $(OBJ) $(LDFLAGS) -o $@
-	./$@
+	#./$@
 
 build/%.o: src/%.c
 		@mkdir -p build

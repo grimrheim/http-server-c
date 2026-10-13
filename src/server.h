@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "http.h"
+#include "stats.h"
 
 #define PORT "8888"
 #define BACKLOG 100000

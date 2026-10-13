@@ -1,3 +1,6 @@
+// POSIX не является стандартом C. 
+// Чтобы подключить расширения для сети, добавляем _GNU_SOURCE.
+// Иначе Makefile не увидит сетевые либы
 #define _GNU_SOURCE
 #include <signal.h>
 #include <sys/socket.h>
@@ -163,6 +166,11 @@ void handle_client_with_fork(int server_socket, int client_socket) {
     // Так как child не принимает новые соединения, он может закрыть
     // свою копию server_socket
     close(server_socket);
+
+    // Ребенок читает общую память из stats.c
+    mem_stats_t *shared_mem = stats_init();
+    read_mem(shared_mem);
+    print_log(shared_mem);
 
     // Читаем запрос от клиента. recv() возвращает:
     //   > 0  — сколько байт реально прочитано
